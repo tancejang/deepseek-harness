@@ -60,6 +60,7 @@ import { idleWatchdog, timeoutOf } from '@deepseek-ai/dsh-timeout'
 import type { ResolvedPiAiProviderProfile } from './config.ts'
 import { toPiContext } from './context.ts'
 import { createModels, getSupportedThinkingLevels } from './models.ts'
+import { sessionHeaders } from './opencode-session.ts'
 import { toStreamChunks } from './stream.ts'
 
 /** One resolution's frozen view: the profiles and the collection built from them. */
@@ -201,13 +202,24 @@ function reasoningInfo(
   }
 }
 
-/** Merge deployment headers while removing case-insensitive attribution collisions. */
-function requestHeaders(headers: Readonly<Record<string, string>> | undefined): Record<string, string> {
-  const attribution = attributionHeaders()
-  const reserved = new Set(Object.keys(attribution).map(name => name.toLowerCase()))
+/**
+ * Merge deployment headers under the Harness-owned ones, which win
+ * case-insensitively. Attribution names are Harness-owned, and so is the
+ * per-conversation session header: a profile's static `headers` entry cannot
+ * express a per-conversation value, so a same-named entry is dropped rather
+ * than left to shadow the id the gateway routes on.
+ * @param headers - the route's configured headers.
+ * @param owned - the headers the Harness owns on this request.
+ * @returns the headers to build the provider request with.
+ */
+function requestHeaders(
+  headers: Readonly<Record<string, string>> | undefined,
+  owned: Readonly<Record<string, string>>,
+): Record<string, string> {
+  const reserved = new Set(Object.keys(owned).map(name => name.toLowerCase()))
   return {
     ...Object.fromEntries(Object.entries(headers ?? {}).filter(([name]) => !reserved.has(name.toLowerCase()))),
-    ...attribution,
+    ...owned,
   }
 }
 
@@ -383,9 +395,12 @@ export class PiAiAdapter extends LlmAdapter {
         ...options.maxTokens === undefined ? {} : { maxTokens: options.maxTokens },
         ...options.sessionId === undefined ? {} : { sessionId: String(options.sessionId) },
         signal: watchdog.signal,
-        // Profile headers are deployment-owned; attribution names are
-        // Harness-owned and therefore win collisions.
-        headers: requestHeaders(profile.headers),
+        // Profile headers are deployment-owned; attribution names and the
+        // per-conversation session header are Harness-owned and win collisions.
+        headers: requestHeaders(profile.headers, {
+          ...attributionHeaders(),
+          ...sessionHeaders(options.provider, model.baseUrl, options.sessionId),
+        }),
       })
       const iterator = toStreamChunks(events, model.contextWindow, options.signal, model.id)[Symbol.asyncIterator]()
       let exhausted = false

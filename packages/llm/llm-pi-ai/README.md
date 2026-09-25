@@ -90,6 +90,10 @@ Each profile may set a `retryPolicy`; omission uses normal mode with five retrie
 
 The generated [configuration catalog](../../../docs/config-catalog.md#deepseek-aidsh-llm-pi-ai) is the exhaustive source for every accepted field and its JSDoc.
 
+### Reach an OpenCode gateway
+
+A route whose key begins with `opencode`, or whose `baseURL` host is `opencode.ai`, sends `x-opencode-session` from `GenerateOptions.sessionId` on every model request. The gateway routes a conversation and keeps its prompt cache warm from that id, and rejects a request that carries none, so the value must be the per-conversation id rather than one fixed per install. The header is Harness-owned: a static `headers` entry of the same name is dropped instead of shadowing it. A request that names no session sends none, because a minted per-request value would satisfy the gateway's presence check while giving its routing nothing stable.
+
 ### Sign in to a provider
 
 A provider pi-ai ships a login for can be signed into through the harness authorization seam: the flow offers OAuth or an interactive key prompt (a key is typed into pi-ai's own login prompt, not into the settings form), and the resulting credential is stored in the harness credential store at `llm-pi-ai/<provider id>`. The stored sign-in authenticates its route beneath any `apiKeyEnv` override and refreshes itself under the store's cross-process lock; signing out deletes the stored record. A hand-declared route key outside the record grammar — a lowercase hyphenated identifier — cannot be signed into, because a record write for it refuses with `LlmError('UNSTORABLE_PROVIDER_ID')`; such a route authenticates through `apiKeyEnv` or ambient provider settings instead.

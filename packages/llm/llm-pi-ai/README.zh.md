@@ -90,6 +90,10 @@ kind: "package-reference"
 
 生成的[配置目录](../../../docs/config-catalog.zh.md#deepseek-aidsh-llm-pi-ai)是每个受支持字段及其 JSDoc 的穷尽式真源。
 
+### 访问 OpenCode 网关
+
+路由键以 `opencode` 开头、或 `baseURL` 主机为 `opencode.ai` 的路由，会在每个模型请求上从 `GenerateOptions.sessionId` 发送 `x-opencode-session`。网关据该 id 为一次会话选路并保持其提示缓存命中，同时对不带该头的请求直接拒绝，因此这个值必须是每次会话的 id，而不是每次安装固定的一个值。该头归 Harness 所有：同名的静态 `headers` 条目会被丢弃，而不会遮蔽它。未指名会话的请求不发送该头，因为临时生成的每次请求值虽能满足网关的存在性检查，却让它的选路无从稳定依附。
+
 ### 登录提供方
 
 pi-ai 提供登录的提供方可以通过 harness 授权 seam 登录：流程提供 OAuth 或交互式密钥提示（密钥键入 pi-ai 自己的登录提示，而非设置表单），得到的凭据存储在 harness 凭据存储的 `llm-pi-ai/<provider id>` 记录中。存储的登录在其路由的 `apiKeyEnv` 覆盖之下完成认证，并在存储的跨进程锁下自行刷新；退出登录即删除存储记录。落在记录文法之外——小写连字符标识符——的手工声明路由键无法登录，因为对它的记录写入会以 `LlmError('UNSTORABLE_PROVIDER_ID')` 拒绝；这类路由改用 `apiKeyEnv` 或提供方 ambient 设置认证。
