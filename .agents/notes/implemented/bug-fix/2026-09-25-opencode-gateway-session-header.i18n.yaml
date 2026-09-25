@@ -1,0 +1,22 @@
+# Bilingual-pair consistency record for 2026-09-25-opencode-gateway-session-header.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write .agents/notes/implemented/bug-fix/2026-09-25-opencode-gateway-session-header.md
+/agent-note-opencode-gateway-session-header:
+  en: 1096472c28e60430
+  zh: 59871c2399ab3ff7
+/agent-note-opencode-gateway-session-header/problem:
+  en: 4b4e87920cb95878
+  zh: b4bc30ed455a1205
+/agent-note-opencode-gateway-session-header/decision:
+  en: dca20cb26a072d08
+  zh: 08d4aeacff6d12bf
+/agent-note-opencode-gateway-session-header/verification:
+  en: 971ba56623dc4226
+  zh: c6a9ef250effe605
+/agent-note-opencode-gateway-session-header/alternatives-considered:
+  en: f969d6706059884e
+  zh: 60bb1da95d8e82ae
+/agent-note-opencode-gateway-session-header/consequences:
+  en: 3414fec99a1b2ff0
+  zh: 5aa17b37f9e6a2f7

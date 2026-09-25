@@ -1047,3 +1047,68 @@ it.each([
   })
   expect(await adapter.listModels('deepseek')).not.toHaveLength(0)
 })
+
+describe('PiAiAdapter OpenCode session header', () => {
+  /** The installed OpenCode catalog, which is the route this gateway serves. */
+  const gatewayCatalog = getBuiltinModels('opencode') as readonly { id: string; api: string }[]
+
+  /** A catalog-keyed route whose requests reach the mock gateway instead. */
+  async function gatewayHarness(
+    provider: string,
+    baseURL: string,
+    overrides: Record<string, unknown> = {},
+  ): Promise<Context> {
+    vi.stubEnv('PI_TEST_KEY', 'test-key')
+    const ctx = new Context()
+    await ctx.plugin(LlmRuntime)
+    await ctx.plugin(LlmPiAi, {
+      providers: { [provider]: { apiKeyEnv: 'PI_TEST_KEY', baseURL, ...overrides } },
+    })
+    return ctx
+  }
+
+  // Each protocol the gateway serves is its own adapter; a header merged at the
+  // stream-options call site has to survive all three. A 401 ends the exchange
+  // deterministically, so the assertion reads only what reached the wire.
+  it.each(['openai-completions', 'openai-responses', 'anthropic-messages'] as const)(
+    'sends the conversation id to the gateway over %s',
+    async (api) => {
+      const model = gatewayCatalog.find(entry => entry.api === api)
+      if (model === undefined) throw new Error(`the installed OpenCode catalog ships no ${api} model`)
+      const server = await mockServer([{ status: 401, body: JSON.stringify({ error: { message: 'expected mock failure' } }) }])
+      const ctx = await gatewayHarness('opencode', server.url)
+      const result = await assemble(ctx, {
+        provider: 'opencode', model: model.id, messages: [], sessionId: 'conversation-over-protocol' as never,
+      })
+      expect(result.finish.kind).toBe('error')
+      expect(server.paths).toHaveLength(1)
+      expect(server.headers[0]?.['x-opencode-session']).toBe('conversation-over-protocol')
+    },
+  )
+
+  it('keeps the per-conversation id over a static header of the same name', async () => {
+    const server = await mockServer([{ status: 401, body: JSON.stringify({ error: { message: 'expected mock failure' } }) }])
+    const ctx = await gatewayHarness('opencode', server.url, { headers: { 'x-opencode-session': 'static-install-id' } })
+    const result = await assemble(ctx, {
+      provider: 'opencode', model: gatewayCatalog[0]!.id, messages: [], sessionId: 'conversation-per-turn' as never,
+    })
+    expect(result.finish.kind).toBe('error')
+    expect(server.headers[0]?.['x-opencode-session']).toBe('conversation-per-turn')
+  })
+
+  it('sends no session header when the request names no session', async () => {
+    const server = await mockServer([{ status: 401, body: JSON.stringify({ error: { message: 'expected mock failure' } }) }])
+    const ctx = await gatewayHarness('opencode', server.url)
+    const result = await assemble(ctx, { provider: 'opencode', model: gatewayCatalog[0]!.id, messages: [] })
+    expect(result.finish.kind).toBe('error')
+    expect(server.headers[0]).not.toHaveProperty('x-opencode-session')
+  })
+
+  it('sends no session header to a provider that did not ask for one', async () => {
+    const server = await mockServer([{ events: textEvents }])
+    const ctx = await harness(server.url)
+    await assemble(ctx, { model: 'deepseek-v4-flash', messages: [], sessionId: 'conversation-elsewhere' as never })
+    expect(server.headers[0]).not.toHaveProperty('x-opencode-session')
+    expect(server.headers[0]?.['user-agent']).toBe(userAgent())
+  })
+})
